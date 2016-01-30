@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Hw5.Hw5 where
-import qualified Data.Map as M
+
 import Hw5.StackVM
 import Hw5.Parser
+import qualified Data.Map as M
 
 data ExprT = LitT Integer
            | AddT ExprT ExprT

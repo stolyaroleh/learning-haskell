@@ -69,6 +69,13 @@ instance Num Matrix2x2 where
               nc = c * a' + d * c'
               nd = c * b' + d * d'
 
+    -- not needed for this assignment
+    (+) (M a b c d) (M a' b' c' d') = M (a + a') (b + b') (c + c') (d + d')
+    (-) (M a b c d) (M a' b' c' d') = M (a - a') (b - b') (c - c') (d - d')
+    fromInteger i      = M i i i i
+    signum             = const 1
+    abs                = id
+
 fibMatrix :: Integer -> Integer
 fibMatrix 0 = 0
 fibMatrix n = takeF (m^n)

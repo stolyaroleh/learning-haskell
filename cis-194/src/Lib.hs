@@ -6,3 +6,5 @@ import Hw3.Hw3
 import Hw4.Hw4
 import Hw5.Hw5
 import Hw6.Hw6
+import Hw7.StringBufEditor
+import Hw7.JoinListBufEditor
