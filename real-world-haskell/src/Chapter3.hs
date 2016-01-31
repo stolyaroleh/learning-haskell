@@ -45,14 +45,13 @@ treeHeight (Node _ left right) = 1 + max (heightOrZero left) (heightOrZero right
           heightOrZero (Just t) = treeHeight t
 
 len :: [a] -> Integer
-len (x:xs)  = 1 + len xs
-len []      = 0
+len = foldr ((+) . const 1) 0
 
 mean :: [Integer] -> Double
 mean [] = 0.0
-mean l = s / length
-    where s      = fromIntegral $ sum l
-          length = fromIntegral $ len l
+mean l = s / len'
+    where s    = fromIntegral $ sum l
+          len' = fromIntegral $ len l
 
 palindrome :: [a] -> [a]
 palindrome l = l ++ reverse l
@@ -77,16 +76,16 @@ data Direction = Direction {
 }
 
 instance Show Direction where
-    show (Direction initial delta) = "Direction: initial " ++ show (initial / pi) ++ " delta " ++ show (delta / pi)
+    show (Direction i d) = "Direction: initial " ++ show (i / pi) ++ " delta " ++ show (d / pi)
 
 isRight :: Direction -> Bool
-isRight (Direction _ delta) = delta < 0.0
+isRight (Direction _ d) = d < 0.0
 
 isLeft :: Direction -> Bool
-isLeft (Direction _ delta) = delta > 0.0
+isLeft (Direction _ d) = d > 0.0
 
 isStraight :: Direction -> Bool
-isStraight (Direction _ delta) = delta == 0.0
+isStraight (Direction _ d) = d == 0.0
 
 type Point2 = (Double, Double)
 type Vec2 = (Double, Double)
@@ -111,6 +110,7 @@ turn a b c = Direction start (end - start)
     where start = angle (vec2 a b) (1, 0)
           end   = angle (vec2 b c) (1, 0)
 
+testHullPoints :: [(Double, Double)]
 testHullPoints = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0),
                   (0.0, 1.0), (1.0, 1.0), (2.0, 1.0),
                   (0.0, 2.0), (1.0, 2.0), (2.0, 2.0)]
@@ -119,11 +119,11 @@ pivot :: [Point2] -> Point2
 pivot = minimumBy (\(x, y) -> compare (y, x))
 
 angleWith :: Point2 -> Point2 -> Double
-angleWith pivot p = angle (vec2 pivot p) (1, 0)
+angleWith piv p = angle (vec2 piv p) (1, 0)
 
 sortedHullPoints :: Point2 -> [Point2] -> [Point2]
-sortedHullPoints pivot points = sortBy (compare `on` angleWith pivot) pointsWithoutPivot
-    where pointsWithoutPivot = delete pivot (nub points)
+sortedHullPoints piv points = sortBy (compare `on` angleWith piv) pointsWithoutPivot
+    where pointsWithoutPivot = delete piv (nub points)
 
 convexHull :: [Point2] -> [Point2]
 convexHull points = p : hullify (p:hullPoints)

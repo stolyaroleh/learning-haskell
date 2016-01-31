@@ -1,0 +1,1 @@
+call stack ghci --ghci-options -ghci-script=../ghci.conf

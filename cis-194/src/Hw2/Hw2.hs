@@ -38,7 +38,7 @@ parseLine line = case (messageType, timeStamp) of
                        (timeStamp, messageWords) = popTimeStamp timeStampAndMessage
 
 parse :: String -> [LogMessage]
-parse text = [parseLine line | line <- (lines text)]
+parse text = [parseLine line | line <- lines text]
 
 insert :: LogMessage -> MessageTree -> MessageTree
 insert (Unknown _) tree = tree
