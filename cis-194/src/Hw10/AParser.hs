@@ -56,20 +56,18 @@ first f (a, c) = (f a, c)
 instance Functor Parser where
   -- fmap :: (a -> b) -> f a -> f b
   -- Parser a = Parser {runParser String -> Maybe (a, String)}
-  fmap f (Parser parse) = Parser newParse
-    where newParse = fmap (first f) . parse
+  fmap f (Parser p) = Parser p'
+    where p' = fmap (first f) . p
 
 instance Applicative Parser where
   -- pure a -> f a
-  pure a = Parser parse
-    where parse string = Just (a, string)
+  pure a = Parser (\str -> Just (a, str))
 
   -- <*> :: f (a -> b) -> f a -> f b
   (Parser p1) <*> (Parser p2) = Parser p
-    where p string = let resultP1 = p1 string
-                     in case resultP1 of
-                       Nothing -> Nothing
-                       Just (func, rest) -> fmap (first func) . p2 $ rest
+    where p str = case p1 str of
+                    Nothing -> Nothing
+                    Just (func, rest) -> fmap (first func) . p2 $ rest
 
 abParser :: Parser (Char, Char)
 abParser = (,) <$> char 'a' <*> char 'b'
@@ -86,7 +84,7 @@ instance Alternative Parser where
   empty = Parser (const Nothing)
   -- <|> :: f a -> f a -> f a
   (Parser p1) <|> (Parser p2) = Parser p
-    where p string = p1 string <|> p2 string
+    where p str = p1 str <|> p2 str
 
 intOrUppercase :: Parser ()
 intOrUppercase = parseUpper <|> parseInt
