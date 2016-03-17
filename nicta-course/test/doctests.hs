@@ -15,7 +15,7 @@ main ::
   IO ()
 main =
   getSources >>= \sources ->
-    forM_ (justPreferred sources) $ \source -> do
+    forM_ (justPreferredOrder sources) $ \source -> do
       hPutStrLn stderr $ "Testing " <> source
       doctest $
           "-isrc"
@@ -29,15 +29,15 @@ sourceDirectories ::
   [FilePath]
 sourceDirectories =
   [
-    "src/Course"
+    "src"
   ]
 
-justPreferred :: [FilePath] -> [FilePath]
-justPreferred sources = filter (`elem` sources) preferredOrder
+justPreferredOrder :: [FilePath] -> [FilePath]
+justPreferredOrder sources = filter (`elem` sources) preferredOrder
 
 preferredOrderFirst :: [FilePath] -> [FilePath]
 preferredOrderFirst sources =
-  justPreferred sources
+  justPreferredOrder sources
   <> filter (`notElem` preferredOrder) sources
 
 -- If you find the tests are running slowly.
