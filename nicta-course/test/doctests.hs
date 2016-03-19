@@ -47,8 +47,8 @@ preferredOrder :: [String]
 preferredOrder = map (\f -> "src/Course" </> f <.> "hs") [
     -- "List"
     -- , "Functor"
-    "Applicative"
-    -- , "Monad"
+    -- , "Applicative"
+    "Monad"
     -- , "FileIO"
     -- , "State"
     -- , "StateT"
