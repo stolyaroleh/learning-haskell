@@ -31,6 +31,9 @@ newtype State s a =
       -> (a, s)
   }
 
+mapOnFirst :: (a -> b) -> (a, c) -> (b, c)
+mapOnFirst f' (a, c) = (f' a, c)
+
 -- | Implement the `Functor` instance for `State s`.
 -- >>> runState ((+1) <$> pure 0) 0
 -- (1,0)
@@ -39,8 +42,7 @@ instance Functor (State s) where
     (a -> b)
     -> State s a
     -> State s b
-  (<$>) =
-      error "todo: Course.State#(<$>)"
+  f <$> s = State $ mapOnFirst f . runState s
 
 -- | Implement the `Applicative` instance for `State s`.
 --
@@ -57,14 +59,20 @@ instance Applicative (State s) where
   pure ::
     a
     -> State s a
-  pure =
-    error "todo: Course.State pure#instance (State s)"
+  pure a =
+    State (\s -> (a, s))
   (<*>) ::
     State s (a -> b)
     -> State s a
-    -> State s b 
-  (<*>) =
-    error "todo: Course.State (<*>)#instance (State s)"
+    -> State s b
+
+  -- State s (a -> b) = State (\s -> (a -> b, s))
+  stateWithFunc <*> stateWithArg =
+    State (\s -> let (f, s') = getFunc s
+                     (a, s'') = getArg s'
+                 in (f a, s''))
+      where getFunc = runState stateWithFunc
+            getArg  = runState stateWithArg
 
 -- | Implement the `Bind` instance for `State s`.
 --
@@ -78,8 +86,10 @@ instance Monad (State s) where
     (a -> State s b)
     -> State s a
     -> State s b
-  (=<<) =
-    error "todo: Course.State (=<<)#instance (State s)"
+  f =<< stateWithArg =
+    State (\s -> let (a, s') = getArg s
+                 in runState (f a) s')
+    where getArg = runState stateWithArg
 
 -- | Run the `State` seeded with `s` and retrieve the resulting state.
 --
@@ -88,8 +98,7 @@ exec ::
   State s a
   -> s
   -> s
-exec =
-  error "todo: Course.State#exec"
+exec state = snd . runState state
 
 -- | Run the `State` seeded with `s` and retrieve the resulting value.
 --
@@ -98,8 +107,7 @@ eval ::
   State s a
   -> s
   -> a
-eval =
-  error "todo: Course.State#eval"
+eval state = fst . runState state
 
 -- | A `State` where the state also distributes into the produced value.
 --
@@ -107,8 +115,7 @@ eval =
 -- (0,0)
 get ::
   State s s
-get =
-  error "todo: Course.State#get"
+get = State (\s -> (s, s))
 
 -- | A `State` where the resulting state is seeded with the given value.
 --
@@ -117,10 +124,9 @@ get =
 put ::
   s
   -> State s ()
-put =
-  error "todo: Course.State#put"
+put s = State (P.const ((), s))
 
--- | Find the first element in a `List` that satisfies a given predicate.
+-- | Find the (first element in a `List` that satisfies a given predicate.
 -- It is possible that no element is found, hence an `Optional` result.
 -- However, while performing the search, we sequence some `Monad` effect through.
 --
@@ -139,10 +145,44 @@ findM ::
   (a -> f Bool)
   -> List a
   -> f (Optional a)
-findM =
-  error "todo: Course.State#findM"
+findM _ Nil = return Empty
+findM p (h :. t) =
+  (\chosen -> if chosen
+                then return $ Full h
+                else findM p t) =<< p h
 
--- | Find the first element in a `List` that repeats.
+
+setStateWithBool :: Ord a =>
+                    (a -> S.Set a -> Bool)
+                    -> a
+                    -> State (S.Set a) Bool
+-- My crappy (or not) solution
+-- setStateWithBool f a = State $ \set -> (a `f` set, a `S.insert` set)
+
+-- What actually was in answers:
+setStateWithBool f = State . lift2 (lift2 (,)) f S.insert
+  -- Arcane magic explained
+  -- lift2 (,) :: Applicative f => f a -> f b -> f (a, b).
+  -- Here, applicatives are functions from a: a -> (S.Set -> Bool), a -> (S.Set -> S.set)
+  -- Lifting with f and S.insert gives us: a -> (S.Set a -> Bool, S.Set a -> S.Set a)
+  -- Lifting again:
+  -- lift2 (lift2 (,)) f S.insert :: Ord a => a -> (S.Set a -> Bool, S.Set a)
+  -- Applying State constructor to return value gives:
+  -- Ord a => a -> Course.State (S.Set a) Bool
+  -- Do people really understand this well when they write it?
+
+evalSetState :: Ord a => State (S.Set a) b -> b
+evalSetState = (`eval` S.empty)
+
+alreadySeen :: Ord a => a -> State (S.Set a) Bool
+alreadySeen = setStateWithBool S.member
+
+
+notSeenYet :: Ord a => a -> State (S.Set a) Bool
+notSeenYet = setStateWithBool S.notMember
+
+
+-- | Find the (first element in a `List` that repeats.
 -- It is possible that no element repeats, hence an `Optional` result.
 --
 -- /Tip:/ Use `findM` and `State` with a @Data.Set#Set@.
@@ -153,8 +193,8 @@ firstRepeat ::
   Ord a =>
   List a
   -> Optional a
-firstRepeat =
-  error "todo: Course.State#firstRepeat"
+firstRepeat = evalSetState . findM alreadySeen
+
 
 -- | Remove all duplicate elements in a `List`.
 -- /Tip:/ Use `filtering` and `State` with a @Data.Set#Set@.
@@ -166,8 +206,7 @@ distinct ::
   Ord a =>
   List a
   -> List a
-distinct =
-  error "todo: Course.State#distinct"
+distinct = evalSetState . filtering notSeenYet
 
 -- | A happy number is a positive integer, where the sum of the square of its digits eventually reaches 1 after repetition.
 -- In contrast, a sad number (not a happy number) is where the sum of the square of its digits never reaches 1
@@ -193,5 +232,6 @@ distinct =
 isHappy ::
   Integer
   -> Bool
-isHappy =
-  error "todo: Course.State#isHappy"
+isHappy = contains 1 . firstRepeat . happySequence
+  where happySequence = produce happyStep
+        happyStep = toInteger . sum . map ((P.^2) . digitToInt) . show'
