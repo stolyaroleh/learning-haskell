@@ -137,8 +137,8 @@ execT ::
   StateT s f a
   -> s
   -> f s
-execT StateT st =
-  snd <$> st
+execT (StateT st) s =
+  snd <$> st s
 
 -- | Run the `State` seeded with `s` and retrieve the resulting state.
 exec' ::
@@ -153,8 +153,8 @@ evalT ::
   StateT s f a
   -> s
   -> f a
-evalT StateT st =
-  fst <$> st
+evalT (StateT st) s =
+  fst <$> st s
 
 -- | Run the `State` seeded with `s` and retrieve the resulting value.
 eval' ::
@@ -276,7 +276,7 @@ instance Monad f => Monad (OptionalT f) where
   f =<< OptionalT a =
     let -- runOptionalT . f -- :: a -> f (Optional b)
         -- f'' :: Optional a -> f (Optional b)
-        f' (Full a) = runOptionalT . f $ a
+        f' (Full x) = runOptionalT . f $ x
         f' Empty    = pure Empty
     in OptionalT $ f' =<< a
 
