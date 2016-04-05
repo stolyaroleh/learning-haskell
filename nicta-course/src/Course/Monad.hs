@@ -177,8 +177,7 @@ infixl 1 >>=
   Monad f =>
   (b -> f c)
   -> (a -> f b)
-  -> a
-  -> f c
+  -> (a -> f c)
 f <=< g = \a -> join (f <$> g a)
 infixr 1 <=<
 

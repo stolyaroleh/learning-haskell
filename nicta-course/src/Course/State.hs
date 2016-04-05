@@ -32,7 +32,7 @@ newtype State s a =
   }
 
 mapOnFirst :: (a -> b) -> (a, c) -> (b, c)
-mapOnFirst f' (a, c) = (f' a, c)
+mapOnFirst f (a, c) = (f a, c)
 
 -- | Implement the `Functor` instance for `State s`.
 -- >>> runState ((+1) <$> pure 0) 0
@@ -152,15 +152,15 @@ findM p (h :. t) =
                 else findM p t) =<< p h
 
 
-setStateWithBool :: Ord a =>
-                    (a -> S.Set a -> Bool)
-                    -> a
-                    -> State (S.Set a) Bool
--- My crappy (or not) solution
--- setStateWithBool f a = State $ \set -> (a `f` set, a `S.insert` set)
+-- State { runState :: s -> (a, s) }
+stateSetWith :: Ord a =>
+                (a -> S.Set a -> b)
+                -> a
+                -> State (S.Set a) b
+stateSetWith f a = State $ \set -> (a `f` set, a `S.insert` set)
 
 -- What actually was in answers:
-setStateWithBool f = State . lift2 (lift2 (,)) f S.insert
+-- stateSetWith f = State . lift2 (lift2 (,)) f S.insert
   -- Arcane magic explained
   -- lift2 (,) :: Applicative f => f a -> f b -> f (a, b).
   -- Here, applicatives are functions from a: a -> (S.Set -> Bool), a -> (S.Set -> S.set)
@@ -175,12 +175,10 @@ evalSetState :: Ord a => State (S.Set a) b -> b
 evalSetState = (`eval` S.empty)
 
 alreadySeen :: Ord a => a -> State (S.Set a) Bool
-alreadySeen = setStateWithBool S.member
-
+alreadySeen = stateSetWith S.member
 
 notSeenYet :: Ord a => a -> State (S.Set a) Bool
-notSeenYet = setStateWithBool S.notMember
-
+notSeenYet = stateSetWith S.notMember
 
 -- | Find the (first element in a `List` that repeats.
 -- It is possible that no element repeats, hence an `Optional` result.
