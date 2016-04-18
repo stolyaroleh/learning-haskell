@@ -209,6 +209,10 @@ setFocus a = withFocus (const a)
 (.=) =
   flip setFocus
 
+null :: List a -> Bool
+null Nil = True
+null _   = False
+
 -- | Returns whether there are values to the left of focus.
 --
 -- >>> hasLeft (zipper [1,0] 2 [3,4])
@@ -219,7 +223,7 @@ setFocus a = withFocus (const a)
 hasLeft ::
   ListZipper a
   -> Bool
-hasLeft = (/= 0) . length . lefts
+hasLeft = not . null . lefts
 
 -- | Returns whether there are values to the right of focus.
 --
@@ -231,7 +235,7 @@ hasLeft = (/= 0) . length . lefts
 hasRight ::
   ListZipper a
   -> Bool
-hasRight = (/= 0) . length . rights
+hasRight = not . null . rights
 
 -- | Seek to the left for a location matching a predicate, starting from the
 -- current one.
@@ -256,10 +260,11 @@ findLeft ::
   -> ListZipper a
   -> MaybeListZipper a
 findLeft p (ListZipper l x r) =
+  let r' = x :. r in
   case break p l of
     (_, Nil) -> IsNotZ
-    (l', x' :. r'') -> let r' = x :. r in
-      IsZ $ ListZipper l' x' (r'' ++ r')
+    (r'', x' :. l') -> IsZ $
+      ListZipper l' x' (reverse r'' ++ r')
 
 -- | Seek to the right for a location matching a predicate, starting from the
 -- current one.
@@ -284,25 +289,31 @@ findRight ::
   -> ListZipper a
   -> MaybeListZipper a
 findRight p (ListZipper l x r) =
+  let l' = x :. l in
   case break p r of
   (_, Nil) -> IsNotZ
-  (l'', x' :. r') -> let l' = l ++ x :. Nil in
-    IsZ $ ListZipper (l' ++ l'') x' r'
+  (l'', x' :. r') -> IsZ $ ListZipper (reverse l'' ++ l') x' r'
 
 
 last :: List a -> a
-last (_ :. rest@(_ :. Nil)) = last rest
-last (x :. Nil) = x
+last (h :. t)
+  | null t    = h
+  | otherwise = last t
+last _ = undefined
 
 init :: List a -> List a
-init (x :. rest@(_ :. Nil)) = x :. init rest
-init (_ :. Nil) = Nil
+init (h :. t)
+  | null t    = Nil
+  | otherwise = h :. init t
+init _ = undefined
 
 head :: List a -> a
 head (x :. _) = x
+head _ = undefined
 
 tail :: List a -> List a
 tail (_ :. t) = t
+tail _ = undefined
 
 
 -- | Move the zipper left, or if there are no elements to the left, go to the far right.
@@ -315,10 +326,11 @@ tail (_ :. t) = t
 moveLeftLoop ::
   ListZipper a
   -> ListZipper a
-moveLeftLoop (ListZipper l x r) =
-  case l of
-    Nil -> ListZipper (l ++ x :. init r) (last r) Nil
-    _   -> ListZipper (init l) (last l) (x :. r)
+moveLeftLoop (ListZipper Nil x r) =
+  let (x' :. r') = reverse (x :. r)
+  in ListZipper r' x' Nil
+moveLeftLoop (ListZipper (x' :. l') x r) =
+  ListZipper l' x' (x :. r)
 
 
 -- | Move the zipper right, or if there are no elements to the right, go to the far left.
@@ -331,10 +343,12 @@ moveLeftLoop (ListZipper l x r) =
 moveRightLoop ::
   ListZipper a
   -> ListZipper a
-moveRightLoop (ListZipper l x r) =
-  case r of
-    Nil -> ListZipper Nil (head l) (tail l ++ r)
-    _   -> ListZipper (l ++ x :. Nil) (head r) (tail r)
+moveRightLoop (ListZipper l x Nil) =
+  let (x' :. r') = reverse (x :. l)
+  in ListZipper Nil x' r'
+moveRightLoop (ListZipper l x (x' :. r')) =
+  ListZipper (x :. l) x' r'
+
 
 -- | Move the zipper one position to the left.
 --
@@ -346,10 +360,9 @@ moveRightLoop (ListZipper l x r) =
 moveLeft ::
   ListZipper a
   -> MaybeListZipper a
-moveLeft (ListZipper l x r) =
-  case l of
-    Nil -> IsNotZ
-    _   -> IsZ $ ListZipper (init l) (last l) (x :. r)
+moveLeft (ListZipper Nil _ _) = IsNotZ
+moveLeft (ListZipper (x' :. l) x r) =
+    IsZ $ ListZipper l x' (x :. r)
 
 -- | Move the zipper one position to the right.
 --
@@ -361,10 +374,9 @@ moveLeft (ListZipper l x r) =
 moveRight ::
   ListZipper a
   -> MaybeListZipper a
-moveRight (ListZipper l x r) =
-  case r of
-    Nil -> IsNotZ
-    _   -> IsZ $ ListZipper (l ++ x :. Nil) (head r) (tail r)
+moveRight (ListZipper _ _ Nil) = IsNotZ
+moveRight (ListZipper l x (x' :. r)) =
+  IsZ $ ListZipper (x :. l) x' r
 
 -- | Swap the current focus with the value to the left of focus.
 --
@@ -376,10 +388,9 @@ moveRight (ListZipper l x r) =
 swapLeft ::
   ListZipper a
   -> MaybeListZipper a
-swapLeft (ListZipper l x r) =
-  case l of
-    Nil -> IsNotZ
-    _   -> IsZ $ ListZipper (init l ++ x :. Nil) (last l) r
+swapLeft (ListZipper Nil _ _) = IsNotZ
+swapLeft (ListZipper (x' :. l) x r) =
+  IsZ $ ListZipper (x :. l) x' r
 
 -- | Swap the current focus with the value to the right of focus.
 --
@@ -391,10 +402,9 @@ swapLeft (ListZipper l x r) =
 swapRight ::
   ListZipper a
   -> MaybeListZipper a
-swapRight (ListZipper l x r) =
-  case r of
-    Nil -> IsNotZ
-    _   -> IsZ $ ListZipper l (head r) (x :. tail r)
+swapRight (ListZipper _ _ Nil) = IsNotZ
+swapRight (ListZipper l x (x' :. r)) =
+  IsZ $ ListZipper l x' (x :. r)
 
 -- | Drop all values to the left of the focus.
 --
@@ -426,6 +436,9 @@ dropRights ::
 dropRights (ListZipper l x _) =
   ListZipper l x Nil
 
+breakAt :: Int -> List a -> (List a, List a)
+breakAt n l = (take n l, drop n l)
+
 -- | Move the focus left the given number of positions. If the value is negative, move right instead.
 --
 -- >>> moveLeftN 2 (zipper [2,1,0] 3 [4,5,6])
@@ -437,8 +450,11 @@ moveLeftN ::
   Int
   -> ListZipper a
   -> MaybeListZipper a
-moveLeftN =
-  error "todo: Course.ListZipper#moveLeftN"
+moveLeftN n z
+  | n >  0 = moveLeftN (n - 1) -<< moveLeft z
+  | n == 0 = IsZ z
+  | n <  0 = moveRightN (-n) z
+  | otherwise = undefined
 
 -- | Move the focus right the given number of positions. If the value is negative, move left instead.
 --
@@ -451,8 +467,12 @@ moveRightN ::
   Int
   -> ListZipper a
   -> MaybeListZipper a
-moveRightN =
-  error "todo: Course.ListZipper#moveRightN"
+moveRightN n z
+  | n >  0 = moveRightN (n - 1) -<< moveRight z
+  | n == 0 = IsZ z
+  | n <  0 = moveLeftN (-n) z
+  | otherwise = undefined
+
 
 -- | Move the focus left the given number of positions. If the value is negative, move right instead.
 -- If the focus cannot be moved, the given number of times, return the value by which it can be moved instead.
@@ -481,8 +501,11 @@ moveLeftN' ::
   Int
   -> ListZipper a
   -> Either Int (ListZipper a)
-moveLeftN' =
-  error "todo: Course.ListZipper#moveLeftN'"
+moveLeftN' n z@(ListZipper l _ _)
+  | n >= 0 = case moveLeftN n z of
+               IsNotZ -> Left $ length l
+               IsZ z' -> Right z'
+  | otherwise = moveRightN' (-n) z
 
 -- | Move the focus right the given number of positions. If the value is negative, move left instead.
 -- If the focus cannot be moved, the given number of times, return the value by which it can be moved instead.
@@ -505,8 +528,11 @@ moveRightN' ::
   Int
   -> ListZipper a
   -> Either Int (ListZipper a)
-moveRightN' =
-  error "todo: Course.ListZipper#moveRightN'"
+moveRightN' n z@(ListZipper _ _ r)
+  | n >= 0 = case moveRightN n z of
+               IsNotZ -> Left $ length r
+               IsZ z' -> Right z'
+  | otherwise = moveLeftN' (-n) z
 
 -- | Move the focus to the given absolute position in the zipper. Traverse the zipper only to the extent required.
 --
@@ -522,8 +548,9 @@ nth ::
   Int
   -> ListZipper a
   -> MaybeListZipper a
-nth =
-  error "todo: Course.ListZipper#nth"
+nth n
+  | n >= 0    = moveRightN n . start
+  | otherwise = const IsNotZ
 
 -- | Return the absolute position of the current focus in the zipper.
 --
@@ -534,8 +561,7 @@ nth =
 index ::
   ListZipper a
   -> Int
-index =
-  error "todo: Course.ListZipper#index"
+index = length . lefts
 
 -- | Move the focus to the end of the zipper.
 --
@@ -548,8 +574,9 @@ index =
 end ::
   ListZipper a
   -> ListZipper a
-end =
-  error "todo: Course.ListZipper#end"
+end z =
+  let (x :. xs) = reverse . toList $ z
+  in ListZipper xs x Nil
 
 -- | Move the focus to the start of the zipper.
 --
@@ -562,8 +589,9 @@ end =
 start ::
   ListZipper a
   -> ListZipper a
-start =
-  error "todo: Course.ListZipper#start"
+start z =
+  let (x :. xs) = toList z
+  in ListZipper Nil x xs
 
 -- | Delete the current focus and pull the left values to take the empty position.
 --
@@ -575,8 +603,10 @@ start =
 deletePullLeft ::
   ListZipper a
   -> MaybeListZipper a
-deletePullLeft =
-  error "todo: Course.ListZipper#deletePullLeft"
+deletePullLeft (ListZipper Nil _ _) =
+  IsNotZ
+deletePullLeft (ListZipper (x :. l) _ r) =
+  IsZ $ ListZipper l x r
 
 -- | Delete the current focus and pull the right values to take the empty position.
 --
@@ -588,8 +618,10 @@ deletePullLeft =
 deletePullRight ::
   ListZipper a
   -> MaybeListZipper a
-deletePullRight =
-  error "todo: Course.ListZipper#deletePullRight"
+deletePullRight (ListZipper _ _ Nil) =
+  IsNotZ
+deletePullRight (ListZipper l _ (x :. r)) =
+  IsZ $ ListZipper l x r
 
 -- | Insert at the current focus and push the left values to make way for the new position.
 --
@@ -604,8 +636,8 @@ insertPushLeft ::
   a
   -> ListZipper a
   -> ListZipper a
-insertPushLeft =
-  error "todo: Course.ListZipper#insertPushLeft"
+insertPushLeft x' (ListZipper l x r) =
+  ListZipper (x :. l) x' r
 
 -- | Insert at the current focus and push the right values to make way for the new position.
 --
@@ -620,8 +652,9 @@ insertPushRight ::
   a
   -> ListZipper a
   -> ListZipper a
-insertPushRight =
-  error "todo: Course.ListZipper#insertPushRight"
+insertPushRight x' (ListZipper l x r) =
+  ListZipper l x' (x :. r)
+
 
 -- | Implement the `Applicative` instance for `ListZipper`.
 -- `pure` produces an infinite list zipper (to both left and right).
@@ -635,11 +668,10 @@ insertPushRight =
 -- [5,12] >8< [15,24,12]
 instance Applicative ListZipper where
 -- /Tip:/ Use @List#repeat@.
-  pure =
-    error "todo: Course.ListZipper pure#instance ListZipper"
+  pure a = ListZipper (repeat a) a (repeat a)
 -- /Tip:/ Use `zipWith`
-  (<*>) =
-    error "todo: Course.ListZipper (<*>)#instance ListZipper"
+  (ListZipper lf f rf) <*> (ListZipper l x r) =
+    ListZipper (zipWith ($) lf l) (f x) (zipWith ($) rf r)
 
 -- | Implement the `Applicative` instance for `MaybeListZipper`.
 --
@@ -662,10 +694,10 @@ instance Applicative ListZipper where
 -- >>> IsNotZ <*> IsNotZ
 -- ><
 instance Applicative MaybeListZipper where
-  pure =
-    error "todo: Course.ListZipper pure#instance MaybeListZipper"
-  (<*>) =
-    error "todo: Course.ListZipper (<*>)#instance MaybeListZipper"
+  pure = IsZ . pure
+  IsZ f <*> IsZ a =
+    IsZ $ f <*> a
+  _ <*> _ = IsNotZ
 
 -- | Implement the `Extend` instance for `ListZipper`.
 -- This implementation "visits" every possible zipper value derivable from a given zipper (i.e. all zippers to the left and right).
@@ -675,8 +707,16 @@ instance Applicative MaybeListZipper where
 -- >>> id <<= (zipper [2,1] 3 [4,5])
 -- [[1] >2< [3,4,5],[] >1< [2,3,4,5]] >[2,1] >3< [4,5]< [[3,2,1] >4< [5],[4,3,2,1] >5< []]
 instance Extend ListZipper where
-  (<<=) =
-    error "todo: Course.ListZipper (<<=)#instance ListZipper"
+  -- (ListZipper a -> b) ->
+  --  ListZipper a ->
+  --  ListZipper b
+
+  f <<= z = ListZipper left (f z) right
+    where left = unfoldr fl z
+          right = unfoldr fr z
+          go z' = (f z', z')
+          fl z' = go <$> toOptional (moveLeft z')
+          fr z' = go <$> toOptional (moveRight z')
 
 -- | Implement the `Extend` instance for `MaybeListZipper`.
 -- This instance will use the `Extend` instance for `ListZipper`.
@@ -688,8 +728,12 @@ instance Extend ListZipper where
 -- >>> id <<= (IsZ (zipper [2,1] 3 [4,5]))
 -- [[1] >2< [3,4,5],[] >1< [2,3,4,5]] >[2,1] >3< [4,5]< [[3,2,1] >4< [5],[4,3,2,1] >5< []]
 instance Extend MaybeListZipper where
-  (<<=) =
-    error "todo: Course.ListZipper (<<=)#instance MaybeListZipper"
+  _ <<= IsNotZ =
+    IsNotZ
+  f <<= IsZ z =
+    IsZ $
+    f . IsZ <<= z
+
 
 -- | Implement the `Comonad` instance for `ListZipper`.
 -- This implementation returns the current focus of the zipper.
@@ -697,8 +741,7 @@ instance Extend MaybeListZipper where
 -- >>> copure (zipper [2,1] 3 [4,5])
 -- 3
 instance Comonad ListZipper where
-  copure =
-    error "todo: Course.ListZipper copure#instance ListZipper"
+  copure (ListZipper _ x _) = x
 
 -- | Implement the `Traversable` instance for `ListZipper`.
 -- This implementation traverses a zipper while running some `Applicative` effect through the zipper.
@@ -710,8 +753,8 @@ instance Comonad ListZipper where
 -- >>> traverse id (zipper [Full 1, Full 2, Full 3] (Full 4) [Empty, Full 6, Full 7])
 -- Empty
 instance Traversable ListZipper where
-  traverse =
-    error "todo: Course.ListZipper traverse#instance ListZipper"
+  traverse f (ListZipper l x r) =
+    ListZipper . reverse <$> traverse f (reverse l) <*> f x <*> traverse f r
 
 -- | Implement the `Traversable` instance for `MaybeListZipper`.
 --
@@ -723,8 +766,8 @@ instance Traversable ListZipper where
 -- >>> traverse id (IsZ (zipper [Full 1, Full 2, Full 3] (Full 4) [Full 5, Full 6, Full 7]))
 -- Full [1,2,3] >4< [5,6,7]
 instance Traversable MaybeListZipper where
-  traverse =
-    error "todo: Course.ListZipper traverse#instance MaybeListZipper"
+  traverse _ IsNotZ = pure IsNotZ
+  traverse f (IsZ z) = IsZ <$> traverse f z
 
 -----------------------
 -- SUPPORT LIBRARIES --
